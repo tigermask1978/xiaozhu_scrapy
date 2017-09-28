@@ -2,6 +2,7 @@
 # -*- coding: utf8 -*-
 from bs4 import BeautifulSoup
 import requests
+import pymongo
 import time
 
 total_count = 300
@@ -10,6 +11,11 @@ total_page = total_count / item_per_page + 1
 
 item_urls = []
 items = []
+
+#设置MongoDB
+client = pymongo.MongoClient('localhost', 27017)
+DB = client['XiaoZhu']
+table = DB['page_info']
 
 def get_url_from_one_page(page_url):
     wb_data = requests.get(page_url)
@@ -30,17 +36,42 @@ def get_item_info(item_url):
     }
     items.append(data)
 
-urls = ['http://bj.xiaozhu.com/search-duanzufang-p{}-0/'.format(str(i)) for i in range(1,total_page + 1)]
-
-for url in urls:
+#获取一页信息并存入MongoDB
+def get_info_of_one_page(page_url):
     time.sleep(2)
-    get_url_from_one_page(url)
+    wb_data = requests.get(page_url)
+    soup = BeautifulSoup(wb_data.text, 'lxml')
+    addresses = soup.select('span.result_title')
+    prices = soup.select('span.result_price > i')
+    for address, price in zip(addresses, prices):
+        table.insert_one({
+            'address': address.get_text(),
+            'price': int(price.get_text())
+        })
 
-    for item_url in item_urls:
-        get_item_info(item_url)
-    item_urls = []
 
-    for item in items:
+if __name__ == '__main__':
+    '''
+    urls = ['http://bj.xiaozhu.com/search-duanzufang-p{}-0/'.format(str(i)) for i in range(1,total_page + 1)]
+    for url in urls:
+        time.sleep(2)
+        get_url_from_one_page(url)
+
+        for item_url in item_urls:
+            get_item_info(item_url)
+        item_urls = []
+
+        for item in items:
+            print item, '\n'
+    '''
+    #获取3页数据
+    # urls = ['http://bj.xiaozhu.com/search-duanzufang-p{}-0/'.format(str(i)) for i in range(1, 4)]
+    # for url in urls:
+    #     get_info_of_one_page(url)
+    # print 'Write Data Done!'
+
+    #查找价格大于等于500元的房源
+    for item in table.find({'price': {'$gte': 500}}):
         print item, '\n'
 
 
